@@ -1,6 +1,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors, { CorsOptions } from 'cors';
 import dotenv from 'dotenv';
+import { databaseService } from './database';
 dotenv.config();
 
 const app = express();
@@ -28,19 +29,76 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 app.use(cors({ origin: "*", }));
+
+// Root route
+app.get('/', (req: Request, res: Response) => {
+	res.json({
+		success: true,
+		message: 'Kaspa Backend API is running',
+		data: {
+			version: '1.0.0',
+			timestamp: new Date().toISOString(),
+			database: databaseService.isDbConnected() ? 'connected' : 'disconnected',
+			message: "✅ Good Network"
+		},
+	});
+});
+
 app.use('/api', router);
 
-router.get("", async (req: Request, res: Response) => {
+// Graceful shutdown handler
+const gracefulShutdown = async () => {
+	console.log('🛑 Received shutdown signal. Graceful shutdown initiated...');
 	try {
-		console.log("New Request : ", new Date())
-		res.json({ state: true, message: "✅ Good Network" });
-	} catch {
-		res.json({ state: false, message: '❌ Bad Network' })
+		await databaseService.disconnect();
+		console.log('✅ Graceful shutdown completed');
+		process.exit(0);
+	} catch (error) {
+		console.error('❌ Error during graceful shutdown:', error);
+		process.exit(1);
 	}
-})
+};
 
-// Start server on port 5184
-const PORT = 5184;
-app.listen(PORT, () => {
-	console.log(`HTTP server running on port ${PORT}`);
-});
+// Handle shutdown signals
+process.on('SIGTERM', gracefulShutdown);
+process.on('SIGINT', gracefulShutdown);
+
+// Start server with database connection
+const startServer = async () => {
+	try {
+		// Connect to database
+		await databaseService.connect();
+
+		// Start server on port 5184
+		const PORT = 5184;
+		const server = app.listen(PORT, () => {
+			console.log(`
+🚀 Kaspa Backend Server Started Successfully!
+📡 Server running on port ${PORT}
+🗄️  Database: Connected
+🌐 API Base URL: http://localhost:${PORT}
+📋 Available endpoints:
+   - GET  /               (Root)
+   - GET  /health         (Health Check)
+   - GET  /api            (API Health Check)
+			`);
+		});
+
+		// Handle server errors
+		server.on('error', (error: any) => {
+			if (error.code === 'EADDRINUSE') {
+				console.error(`❌ Port ${PORT} is already in use`);
+			} else {
+				console.error('❌ Server error:', error);
+			}
+			process.exit(1);
+		});
+
+	} catch (error) {
+		console.error('❌ Failed to start server:', error);
+		process.exit(1);
+	}
+};
+
+// Initialize server
+startServer();
