@@ -1,4 +1,5 @@
 import { MongoClient, Db, Collection, Document } from 'mongodb';
+import { config } from '../config/environment';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -13,8 +14,8 @@ class DatabaseService {
 	 */
 	public async connect(): Promise<void> {
 		try {
-			const mongoUrl = process.env.MONGODB_URL || 'mongodb://localhost:27017';
-			const dbName = process.env.MONGO_PATH || 'kaspa_dex';
+			const mongoUrl = config.database.url;
+			const dbName = config.database.name;
 
 			this.client = new MongoClient(mongoUrl);
 			await this.client.connect();
